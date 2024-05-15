@@ -117,25 +117,6 @@ def integrate_over_bins(func,binEdges):
     return binnedSpec
 
 
-def integrate_bins_fast(f,ebins,n=10):
-    """
-    Integrates a function f within the bins defined by ebins
-    Parameters:
-        - f: function to be integrated
-        - ebins: 1d-array, must the contain evenly spaced bin centers
-        - n=10: int, number of point within each bin used for integrations
-    """
-    #get the evaluation points for the array. this could be given as parameter,
-    #which would speed up the calculation a lot.
-    de=ebins[1]-ebins[0]
-    delta=((np.arange(n)-(n-1)/2)/n)*de
-    e_eval=np.repeat(ebins,n)+np.tile(delta,ebins.shape[0])
-    
-    #evaluate the function and sum over each bin
-    f_out=f(e_eval)
-    return np.reshape(f_out,(ebins.shape[0],n)).sum(axis=1)*de/n
-
-
 def diffspec_mixed_binned(energyBinEdges, mSterile=0, sin2theta=0, fast=False):
     
     # define function for bin integration

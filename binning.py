@@ -1,6 +1,5 @@
 import numpy as np
 from typing import Tuple
-from numba import njit
 
 #-------------------------------------------------------------------------
 # Binning class
@@ -94,104 +93,31 @@ class binning:
         return self.nbin
 
 
-
-#-------------------------------------------------------------------------
-# Binning utilities
-
-@njit
-def centers(binBorders: np.ndarray) -> np.ndarray:
-    """
-    Calculate bin centers from borders/edges,
-    assuming equally sized bins.
-    """
-
-    return (binBorders[1:]+binBorders[:-1])/2.
-
-@njit
-def borders(binCenters: np.ndarray) -> np.ndarray:
-    """
-    Calculate bin borders/edges from centers,
-    assuming equally sized bins.
-    """
-    
-    width = binCenters[1]-binCenters[0]
-    return np.linspace(binCenters[0]-width/2., binCenters[-1]+width/2., len(binCenters)+1)
-
-
-def change_bin_range(binEdges: np.ndarray, newRange: Tuple[float,float]) -> np.ndarray:
-    '''
-    Extend or shrink an array of bin edges to a new range, 
-    while retaining bin width and edges within that range.
-    '''
-    
-    # to be clear
-    oldBins = binEdges
-    
-    # bin width (assuming equal size)
-    width = oldBins[1]-oldBins[0]
-
-    # create extensions if new range is bigger on either side
-    extensionLower = np.flip(np.arange(oldBins[0] -width, newRange[ 0]-width,-width))
-    extensionUpper =         np.arange(oldBins[-1]+width, newRange[-1]+width, width)
-
-    # create masks for the case that new range is smaller for eiter side
-    mask1 = (extensionLower>newRange[0]-width) & (extensionLower<newRange[1]+width)
-    mask2 = (oldBins       >newRange[0]-width) & (oldBins       <newRange[1]+width)
-    mask3 = (extensionUpper>newRange[0]-width) & (extensionUpper<newRange[1]+width)
-
-    # combine into one
-    newBins = np.concatenate((extensionLower[mask1], oldBins[mask2], extensionUpper[mask3]))
-    
-    return newBins
-
-
 #-------------------------------------------------------------------------
 # Integration over bins
 
-def integrate_bins_fast(f,eBinCenters,n=10):
+def integrate_bins_fast(f,bins,n=10):
     """
-    Integrates a function f within the bins defined by eBinCenters
+    Integrates a function f within the bins defined by binCenters
     Parameters:
         - f: function to be integrated
-        - eBinCenters: 1d-array, must the contain evenly spaced bin centers
+        - bins: binning object or 1d-array of evenly spaced bin centers
         - n=10: int, number of point within each bin used for integrations
     """
+
+    # check if binning object or centers given
+    if hasattr(bins, "edges") and hasattr(bins, "centers"):
+        binCenters = bins.centers
+    else:
+        binCenters = bins
+
     #get the evaluation points for the array. this could be given as parameter,
     #which would speed up the calculation a lot.
-    de=eBinCenters[1]-eBinCenters[0]
+    de=binCenters[1]-binCenters[0]
     delta=((np.arange(n)-(n-1)/2)/n)*de
-    e_eval=np.repeat(eBinCenters,n)+np.tile(delta,eBinCenters.shape[0])
+    e_eval=np.repeat(binCenters,n)+np.tile(delta,binCenters.shape[0])
     
     #evaluate the function and sum over each bin
     f_out=f(e_eval)
-    return np.reshape(f_out,(eBinCenters.shape[0],n)).sum(axis=1)*de/n
+    return np.reshape(f_out,(binCenters.shape[0],n)).sum(axis=1)*de/n
 
-
-#-------------------------------------------------------------------------
-# Bin to bin mapping for response construction
-
-@njit
-def intervalOverlap(a, b):
-    return max(0, min(a[1], b[1]) - max(a[0], b[0]))
-
-
-@njit
-def map_bin_to_bin(oldBins,newBins):
-    
-    # initialize angle bin to angle bin response
-    response = np.zeros((len(oldBins)-1,len(newBins)-1))
-    
-    # bin width
-    w = (oldBins[1]-oldBins[0])
-    
-    # loop over input bins to see which fall into range
-    for j,b in enumerate(zip(oldBins, oldBins[1:])):
-        
-        # loop over ranges corresponding to output bins
-        for i,r in enumerate(zip(newBins, newBins[1:])):
-            r = list(r)
-            
-            # matrix element from overlap of bin and range
-            response[j,i] = intervalOverlap(b,r)/w
-    
-    return response
